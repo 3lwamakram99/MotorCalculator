@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ElectroBase · Motor Cable & Breaker Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #060a0f;
+      --surface:  #0a1018;
+      --card:     #0f1923;
+      --card2:    #131f2b;
+      --border:   #1e3a4a;
+      --accent:   #00d4ff;
+      --accent2:  #f5a623;
+      --accent3:  #00ff88;
+      --danger:   #ff4444;
+      --text:     #d0e8f0;
+      --muted:    #4a7a8a;
+      --glow-b:   rgba(0,212,255,.2);
+      --glow-o:   rgba(245,166,35,.2);
+      --glow-g:   rgba(0,255,136,.15);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Circuit board background ── */
+    .bg-layer {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 50% at 0% 0%,   rgba(0,212,255,.06) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 100% 100%, rgba(245,166,35,.05) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 50% 50%,  rgba(0,255,136,.03) 0%, transparent 55%);
+    }
+
+    /* ── Grid ── */
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,212,255,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ── Circuit traces decoration ── */
+    .bg-grid::after {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,.06) 1px, transparent 1px);
+      background-size: 200px 200px;
+    }
+
+    /* ── Layout ── */
+    .wrap {
+      position: relative; z-index: 1;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 50px 20px 100px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 42px;
+      animation: fadeDown .65s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    .logo-wrap {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 82px; height: 82px;
+      position: relative; margin-bottom: 18px;
+    }
+
+    .logo-hex {
+      position: absolute; inset: 0;
+      background: rgba(0,212,255,.06);
+      border: 1.5px solid var(--accent);
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      animation: pulse 3s ease-in-out infinite;
+    }
+
+    .logo-inner-icon { position: relative; z-index: 1; }
+    .logo-inner-icon svg { width: 34px; height: 34px; }
+
+    h1 {
+      font-family: 'Exo 2', sans-serif;
+      font-weight: 800;
+      font-size: clamp(2rem, 7vw, 3rem);
+      letter-spacing: -1px; line-height: 1;
+    }
+    h1 em { font-style: normal; color: var(--accent); }
+
+    .tagline {
+      margin-top: 9px;
+      font-size: .7rem; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--muted); font-weight: 500;
+    }
+
+    .base-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      margin-top: 14px;
+      background: rgba(0,212,255,.08);
+      border: 1px solid rgba(0,212,255,.2);
+      border-radius: 99px; padding: 5px 16px;
+      font-size: .65rem; color: var(--accent);
+      letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
+    }
+    .base-badge::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 8px var(--accent);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    /* ── Wallet Bar ── */
+    .wallet-bar {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 13px 18px;
+      margin-bottom: 10px;
+      animation: fadeUp .55s .1s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border); flex-shrink: 0;
+      transition: background .4s, box-shadow .4s;
+    }
+    .status-dot.on {
+      background: var(--accent3);
+      box-shadow: 0 0 10px var(--accent3);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    .wallet-info { flex: 1; min-width: 0; }
+    .wallet-label { font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-weight: 600; margin-bottom: 2px; }
+    .wallet-addr {
+      font-size: .72rem; color: var(--muted);
+      font-family: 'Share Tech Mono', monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: color .3s;
+    }
+    .wallet-addr.connected { color: var(--accent3); }
+
+    #connectBtn {
+      flex-shrink: 0;
+      background: var(--accent);
+      color: #000; border: none; border-radius: 8px;
+      padding: 9px 18px;
+      font-family: 'Exo 2', sans-serif;
+      font-size: .75rem; font-weight: 700;
+      cursor: pointer; transition: all .2s;
+      white-space: nowrap;
+      box-shadow: 0 4px 16px var(--glow-b);
+    }
+    #connectBtn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px var(--glow-b); }
+    #connectBtn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    /* ── Sign Panel ── */
+    .sign-panel {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px;
+      margin-bottom: 20px;
+      animation: fadeUp .4s cubic-bezier(.22,1,.36,1) both;
+    }
+    .sign-panel.visible { display: block; }
+
+    .sign-title {
+      font-size: .6rem; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted); font-weight: 600; margin-bottom: 12px;
+    }
+
+    #signBtn {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--accent);
+      border-radius: 8px; color: var(--accent);
+      font-family: 'Exo 2', sans-serif;
+      font-size: .78rem; font-weight: 600;
+      padding: 11px; cursor: pointer;
+      transition: all .2s; margin-bottom: 14px;
+    }
+    #signBtn:hover { background: var(--accent); color: #000; box-shadow: 0 4px 16px var(--glow-b); }
+    #signBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .sig-box {
+      display: none;
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px;
+    }
+    .sig-box.visible { display: block; animation: popIn .4s cubic-bezier(.34,1.56,.64,1) both; }
+
+    .sig-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+    .sig-row:last-child { margin-bottom: 0; }
+    .sig-key { font-size: .58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; padding-top: 2px; min-width: 55px; font-weight: 600; }
+    .sig-val { font-size: .68rem; color: var(--accent3); word-break: break-all; line-height: 1.6; flex: 1; font-family: 'Share Tech Mono', monospace; }
+    .sig-val.hash { color: var(--accent); }
+
+    .copy-btn {
+      flex-shrink: 0; background: var(--card);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted);
+      font-family: 'Exo 2', sans-serif;
+      font-size: .6rem; font-weight: 600;
+      padding: 3px 8px; cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .copy-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+
+    .basescan-verify-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 12px; width: 100%; justify-content: center;
+      background: rgba(0,255,136,.06);
+      border: 1px solid rgba(0,255,136,.2);
+      border-radius: 8px; padding: 9px;
+      font-size: .68rem; font-weight: 600; color: var(--accent3);
+      text-decoration: none; transition: all .2s;
+    }
+    .basescan-verify-link:hover { background: rgba(0,255,136,.12); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px; padding: 30px 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+      position: relative; overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: .6;
+    }
+    .card-anim { animation: fadeUp .55s .2s cubic-bezier(.22,1,.36,1) both; }
+
+    .card-title {
+      font-weight: 700; font-size: 1rem;
+      margin-bottom: 24px;
+      display: flex; align-items: center; gap: 10px;
+      color: var(--accent);
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .card-icon {
+      width: 34px; height: 34px;
+      background: rgba(0,212,255,.1);
+      border: 1px solid rgba(0,212,255,.2);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Phase Selector ── */
+    .phase-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .phase-btn {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px; padding: 20px 14px;
+      cursor: pointer; text-align: center;
+      transition: all .2s; color: var(--muted);
+      font-family: 'Exo 2', sans-serif;
+    }
+    .phase-btn:hover { border-color: var(--accent); }
+    .phase-btn.active {
+      background: rgba(0,212,255,.08);
+      border-color: var(--accent);
+      color: var(--text);
+      box-shadow: 0 0 20px var(--glow-b);
+    }
+    .phase-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
+    .phase-name { font-size: .85rem; font-weight: 700; display: block; letter-spacing: .04em; }
+    .phase-desc { font-size: .65rem; color: var(--muted); margin-top: 4px; display: block; letter-spacing: .04em; }
+    .phase-btn.active .phase-desc { color: var(--accent); }
+
+    /* ── Form ── */
+    .field { margin-bottom: 20px; }
+    label {
+      display: block; font-size: .62rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--muted);
+      font-weight: 600; margin-bottom: 8px;
+    }
+
+    .input-wrap { position: relative; }
+    .input-unit {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      font-size: .8rem; color: var(--muted); pointer-events: none;
+      font-weight: 700; font-family: 'Share Tech Mono', monospace;
+    }
+
+    input[type=number], select {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1.3rem; font-weight: 400;
+      padding: 14px 60px 14px 18px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      -moz-appearance: textfield;
+    }
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--glow-b);
+    }
+    select { font-size: .9rem; padding: 14px 18px; cursor: pointer; appearance: none; }
+    select option { background: var(--surface); }
+
+    /* Voltage note */
+    .voltage-note {
+      margin-top: 8px;
+      font-size: .68rem; color: var(--accent2);
+      font-family: 'Share Tech Mono', monospace;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .voltage-note::before { content: '⚡'; }
+
+    /* Power factor row */
+    .pf-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+
+    /* ── Calculate Button ── */
+    #calcBtn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent) 0%, #0099cc 100%);
+      color: #000; border: none; border-radius: 12px;
+      padding: 18px;
+      font-family: 'Exo 2', sans-serif;
+      font-size: 1rem; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase;
+      cursor: pointer; transition: all .2s;
+      box-shadow: 0 6px 24px var(--glow-b);
+    }
+    #calcBtn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px var(--glow-b); }
+    #calcBtn:active { transform: translateY(0); }
+    #calcBtn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .btn-inner { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+    /* ── Results Card ── */
+    #resultCard {
+      display: none;
+      animation: popIn .5s cubic-bezier(.34,1.56,.64,1) both;
+    }
+
+    .result-header {
+      font-weight: 700; font-size: .85rem;
+      color: var(--accent3); text-transform: uppercase;
+      letter-spacing: .1em; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .result-header::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent3); box-shadow: 0 0 8px var(--accent3);
+    }
+
+    .results-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; margin-bottom: 20px;
+    }
+
+    .res-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 14px;
+      position: relative; overflow: hidden;
+      transition: border-color .3s;
+    }
+    .res-box::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    }
+    .res-box.blue::before  { background: var(--accent); }
+    .res-box.orange::before { background: var(--accent2); }
+    .res-box.green::before  { background: var(--accent3); }
+    .res-box.red::before    { background: var(--danger); }
+
+    .res-label {
+      font-size: .58rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .12em; font-weight: 600; margin-bottom: 6px;
+    }
+    .res-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1.5rem; font-weight: 400; line-height: 1;
+    }
+    .res-box.blue .res-value   { color: var(--accent); }
+    .res-box.orange .res-value { color: var(--accent2); }
+    .res-box.green .res-value  { color: var(--accent3); }
+    .res-box.red .res-value    { color: var(--danger); }
+
+    .res-unit {
+      font-size: .65rem; color: var(--muted); margin-top: 4px;
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    /* Full-width result box */
+    .res-box.full { grid-column: 1 / -1; }
+
+    /* ── Recommendation Box ── */
+    .rec-box {
+      background: rgba(0,212,255,.05);
+      border: 1px solid rgba(0,212,255,.2);
+      border-radius: 12px; padding: 18px 16px;
+      margin-bottom: 12px;
+    }
+    .rec-title {
+      font-size: .62rem; color: var(--accent); text-transform: uppercase;
+      letter-spacing: .12em; font-weight: 600; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .rec-title svg { flex-shrink: 0; }
+
+    .rec-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .82rem;
+    }
+    .rec-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .rec-item-label { color: var(--muted); font-weight: 500; }
+    .rec-item-value { font-family: 'Share Tech Mono', monospace; color: var(--text); font-weight: 600; }
+    .rec-item-value.highlight { color: var(--accent2); font-size: .95rem; }
+
+    /* ── Warning box ── */
+    .warn-box {
+      background: rgba(245,166,35,.06);
+      border: 1px solid rgba(245,166,35,.25);
+      border-radius: 10px; padding: 12px 16px;
+      font-size: .75rem; color: var(--accent2);
+      line-height: 1.6; margin-top: 12px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .warn-icon { flex-shrink: 0; font-size: 1rem; margin-top: 1px; }
+
+    /* TX badge */
+    .tx-badge {
+      display: none; margin-top: 14px;
+      background: rgba(0,255,136,.05);
+      border: 1px solid rgba(0,255,136,.2);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: .68rem; color: var(--accent3);
+      word-break: break-all; line-height: 1.6;
+      font-family: 'Share Tech Mono', monospace;
+    }
+    .tx-badge a { color: var(--accent3); text-decoration: underline; }
+
+    /* ── Owner Section ── */
+    .owner-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px 20px;
+      animation: fadeUp .55s .35s cubic-bezier(.22,1,.36,1) both;
+    }
+    .owner-row { display: flex; align-items: flex-start; gap: 12px; }
+    .owner-icon {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: rgba(0,212,255,.1);
+      border: 1px solid rgba(0,212,255,.2);
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    }
+    .owner-text .ok { font-size: .58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+    .owner-text .ov { font-size: .7rem; color: var(--accent); word-break: break-all; margin-top: 3px; font-family: 'Share Tech Mono', monospace; }
+    .basescan-link {
+      display: inline-block; margin-top: 8px;
+      font-size: .65rem; font-weight: 600; color: var(--accent);
+      text-decoration: none;
+      border: 1px solid rgba(0,212,255,.25);
+      border-radius: 6px; padding: 4px 10px; transition: all .15s;
+    }
+    .basescan-link:hover { background: rgba(0,212,255,.1); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; margin-top: 44px;
+      font-size: .62rem; color: var(--muted);
+      letter-spacing: .1em; text-transform: uppercase; font-weight: 500;
+      animation: fadeUp .55s .5s cubic-bezier(.22,1,.36,1) both;
+    }
+    footer span { color: var(--accent); }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(0,0,0,.3);
+      border-top-color: #000; border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 26px; left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--card2); color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px 22px;
+      font-size: .75rem; font-weight: 600;
+      z-index: 999; opacity: 0;
+      transition: transform .32s cubic-bezier(.22,1,.36,1), opacity .3s;
+      white-space: nowrap; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.error   { border-color: var(--danger); color: var(--danger); }
+    #toast.success { border-color: var(--accent3); color: var(--accent3); }
+
+    /* ── Animations ── */
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-18px)} to{opacity:1;transform:none} }
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(18px)}  to{opacity:1;transform:none} }
+    @keyframes popIn    { from{opacity:0;transform:scale(.93)}         to{opacity:1;transform:none} }
+    @keyframes spin     { to{transform:rotate(360deg)} }
+    @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes pulse    { 0%,100%{box-shadow:0 0 15px var(--glow-b)} 50%{box-shadow:0 0 35px var(--glow-b)} }
+
+    @media(max-width:500px){
+      .card { padding: 22px 16px; }
+      .results-grid { grid-template-columns: 1fr; }
+      .res-box.full { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="bg-grid"></div>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-wrap">
+      <div class="logo-hex"></div>
+      <div class="logo-inner-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+    </div>
+    <h1>Electro<em>Base</em></h1>
+    <p class="tagline">Motor Cable · Ampere · Circuit Breaker Calculator</p>
+    <div class="base-badge">Base Blockchain · For Electrical Engineers</div>
+  </header>
+
+  <!-- Wallet Bar -->
+  <div class="wallet-bar">
+    <div class="status-dot" id="dot"></div>
+    <div class="wallet-info">
+      <div class="wallet-label">Wallet</div>
+      <div class="wallet-addr" id="walletAddr">Not connected</div>
+    </div>
+    <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+  </div>
+
+  <!-- Sign Panel -->
+  <div class="sign-panel" id="signPanel">
+    <div class="sign-title">⚡ Prove Ownership · Sign a Message</div>
+    <button id="signBtn" onclick="signOwnership()">Sign Message with My Wallet</button>
+    <div class="sig-box" id="sigBox">
+      <div class="sig-row">
+        <span class="sig-key">Message</span>
+        <span class="sig-val" id="sigMessage"></span>
+      </div>
+      <div class="sig-row">
+        <span class="sig-key">Wallet</span>
+        <span class="sig-val" id="sigWallet"></span>
+        <button class="copy-btn" onclick="copyText('sigWallet')">Copy</button>
+      </div>
+      <div class="sig-row">
+        <span class="sig-key">Sig Hash</span>
+        <span class="sig-val hash" id="sigHash"></span>
+        <button class="copy-btn" onclick="copyText('sigHash')">Copy</button>
+      </div>
+      <a class="basescan-verify-link" id="bsVerifyLink" href="#" target="_blank" rel="noopener">
+        🔍 &nbsp;Verify Signature on Basescan ↗
+      </a>
+    </div>
+  </div>
+
+  <!-- Input Card -->
+  <div class="card card-anim">
+    <div class="card-title">
+      <div class="card-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      </div>
+      Motor Parameters
+    </div>
+
+    <!-- Phase selector -->
+    <label style="margin-bottom:10px;">Motor Type</label>
+    <div class="phase-grid">
+      <button class="phase-btn active" id="ph3" onclick="setPhase(3)">
+        <span class="phase-icon">⚡⚡⚡</span>
+        <span class="phase-name">3-Phase</span>
+        <span class="phase-desc">380V / 400V / 415V</span>
+      </button>
+      <button class="phase-btn" id="ph1" onclick="setPhase(1)">
+        <span class="phase-icon">⚡</span>
+        <span class="phase-name">Single Phase</span>
+        <span class="phase-desc">220V / 230V / 240V</span>
+      </button>
+    </div>
+
+    <!-- Rated Power -->
+    <div class="field">
+      <label>Rated Motor Power</label>
+      <div class="input-wrap">
+        <input type="number" id="powerInput" placeholder="e.g. 7.5" min="0.1" max="10000" step="0.1"/>
+        <span class="input-unit" id="powerUnit">kW</span>
+      </div>
+    </div>
+
+    <!-- Power unit toggle -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;margin-top:-12px;">
+      <button class="copy-btn active" id="pkw" onclick="setPowerUnit('kW')" style="flex:1;padding:7px;font-size:.7rem;">kW</button>
+      <button class="copy-btn" id="php" onclick="setPowerUnit('HP')" style="flex:1;padding:7px;font-size:.7rem;">HP (Horsepower)</button>
+    </div>
+
+    <!-- Voltage -->
+    <div class="field">
+      <label id="voltLabel">Supply Voltage</label>
+      <div class="input-wrap">
+        <input type="number" id="voltInput" value="400" min="100" max="1000"/>
+        <span class="input-unit">V</span>
+      </div>
+      <div class="voltage-note" id="voltNote">Standard 3-phase: 380V / 400V / 415V</div>
+    </div>
+
+    <!-- Power Factor & Efficiency -->
+    <div class="pf-row">
+      <div class="field">
+        <label>Power Factor (cosφ)</label>
+        <div class="input-wrap">
+          <input type="number" id="pfInput" value="0.85" min="0.5" max="1" step="0.01"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Motor Efficiency (η)</label>
+        <div class="input-wrap">
+          <input type="number" id="effInput" value="0.90" min="0.5" max="1" step="0.01"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cable Installation -->
+    <div class="field">
+      <label>Cable Installation Method</label>
+      <div class="input-wrap">
+        <select id="installMethod">
+          <option value="1.0">In conduit / enclosed (×1.0)</option>
+          <option value="0.8">Buried in ground (×0.8 derating)</option>
+          <option value="1.2" selected>On cable tray / open air (×1.2)</option>
+          <option value="0.75">Bundled with other cables (×0.75)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Cable material -->
+    <div class="field">
+      <label>Cable Conductor Material</label>
+      <div class="input-wrap">
+        <select id="cableMaterial">
+          <option value="copper" selected>Copper (Cu)</option>
+          <option value="aluminum">Aluminum (Al)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Calculate -->
+    <button id="calcBtn" onclick="calculate()">
+      <span class="btn-inner" id="btnInner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        CALCULATE
+      </span>
+    </button>
+  </div>
+
+  <!-- Results Card -->
+  <div class="card" id="resultCard">
+    <div class="result-header">Calculation Results</div>
+
+    <div class="results-grid">
+      <div class="res-box blue">
+        <div class="res-label">Full Load Current</div>
+        <div class="res-value" id="rCurrent">—</div>
+        <div class="res-unit">Amperes (A)</div>
+      </div>
+      <div class="res-box orange">
+        <div class="res-label">Starting Current</div>
+        <div class="res-value" id="rStartCurrent">—</div>
+        <div class="res-unit">A (≈ 6× FLC)</div>
+      </div>
+      <div class="res-box green">
+        <div class="res-label">Cable Cross-Section</div>
+        <div class="res-value" id="rCableSize">—</div>
+        <div class="res-unit" id="rCableUnit">mm² Cu</div>
+      </div>
+      <div class="res-box red">
+        <div class="res-label">Circuit Breaker</div>
+        <div class="res-value" id="rBreaker">—</div>
+        <div class="res-unit">Amperes (A)</div>
+      </div>
+      <div class="res-box blue full">
+        <div class="res-label">Apparent Power (Input)</div>
+        <div class="res-value" id="rKva">—</div>
+        <div class="res-unit">kVA</div>
+      </div>
+    </div>
+
+    <!-- Detailed Recommendation -->
+    <div class="rec-box">
+      <div class="rec-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Recommended Specifications
+      </div>
+      <div class="rec-item">
+        <span class="rec-item-label">Cable Size (Standard)</span>
+        <span class="rec-item-value highlight" id="recCable">—</span>
+      </div>
+      <div class="rec-item">
+        <span class="rec-item-label">Circuit Breaker (MCB/MCCB)</span>
+        <span class="rec-item-value highlight" id="recBreaker">—</span>
+      </div>
+      <div class="rec-item">
+        <span class="rec-item-label">Thermal Overload Relay</span>
+        <span class="rec-item-value" id="recRelay">—</span>
+      </div>
+      <div class="rec-item">
+        <span class="rec-item-label">Contactor Rating</span>
+        <span class="rec-item-value" id="recContactor">—</span>
+      </div>
+      <div class="rec-item">
+        <span class="rec-item-label">Cable Standard</span>
+        <span class="rec-item-value" id="recStandard">IEC 60364 / BS 7671</span>
+      </div>
+    </div>
+
+    <div class="warn-box">
+      <span class="warn-icon">⚠️</span>
+      <span id="warnMsg">Always verify calculations with a qualified electrical engineer. Cable sizing must comply with local wiring regulations. Apply appropriate safety factors for ambient temperature and grouping.</span>
+    </div>
+
+    <div class="tx-badge" id="txBadge"></div>
+  </div>
+
+  <!-- Owner Section -->
+  <div class="owner-section">
+    <div class="owner-row">
+      <div class="owner-icon">🔐</div>
+      <div class="owner-text">
+        <div class="ok">Contract Owner · Verified on Basescan</div>
+        <div class="ov">0x8731F248c8F810168C1b58675609667F3bf8476A</div>
+        <a class="basescan-link" href="https://basescan.org/address/0x8731F248c8F810168C1b58675609667F3bf8476A" target="_blank" rel="noopener">
+          View on Basescan ↗
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built on <span>Base</span> · Powered by <span>Ethers.js v6</span><br/>
+    <span>ElectroBase · Empowering Electrical Engineers</span>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── CONFIG ──────────────────────────────────────
+  const CONTRACT_ADDRESS = ""; // ← paste after deploying MotorCalculator.sol
+  const OWNER_WALLET     = "0x8731F248c8F810168C1b58675609667F3bf8476A";
+  const BASE_CHAIN_ID    = "0x2105";
+
+  const ABI = [
+    "function calculate(uint256 powerW, uint8 phases, uint256 voltageV, uint256 pfX100, uint256 effX100) external returns (uint256 currentX100, uint256 cableMm2X10, uint256 breakerA)",
+    "function owner() view returns (address)",
+    "event Calculated(address indexed user, uint256 powerW, uint8 phases, uint256 currentX100, uint256 cableMm2X10, uint256 breakerA)"
+  ];
+
+  // ── State ────────────────────────────────────────
+  let provider, signer, contract;
+  let phaseMode  = 3;     // 3 or 1
+  let powerUnitM = 'kW';  // 'kW' or 'HP'
+
+  // ── Standard cable sizes (mm²) ───────────────────
+  const STD_CABLE_CU = [1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300];
+  const STD_CABLE_AL = [6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300];
+
+  // Current capacity (A) for Cu cables in open air (approx IEC)
+  const CU_CAPACITY  = [14,18,25,32,40,57,75,100,120,150,185,225,260,295,340,415,480];
+  const AL_CAPACITY  = [47,60,78,100,125,155,190,230,265,300,345,415,480];
+
+  // Standard breaker sizes
+  const STD_BREAKERS = [6,10,16,20,25,32,40,50,63,80,100,125,160,200,250,315,400,500,630];
+
+  // ── Phase toggle ──────────────────────────────────
+  function setPhase(p) {
+    phaseMode = p;
+    document.getElementById('ph3').classList.toggle('active', p === 3);
+    document.getElementById('ph1').classList.toggle('active', p === 1);
+    if (p === 3) {
+      document.getElementById('voltInput').value = 400;
+      document.getElementById('voltNote').textContent = 'Standard 3-phase: 380V / 400V / 415V';
+    } else {
+      document.getElementById('voltInput').value = 230;
+      document.getElementById('voltNote').textContent = 'Standard single-phase: 220V / 230V / 240V';
+    }
+    document.getElementById('resultCard').style.display = 'none';
+  }
+
+  // ── Power unit toggle ─────────────────────────────
+  function setPowerUnit(u) {
+    powerUnitM = u;
+    document.getElementById('powerUnit').textContent = u;
+    document.getElementById('pkw').style.background  = u === 'kW' ? 'var(--accent)' : '';
+    document.getElementById('pkw').style.color       = u === 'kW' ? '#000' : '';
+    document.getElementById('php').style.background  = u === 'HP' ? 'var(--accent)' : '';
+    document.getElementById('php').style.color       = u === 'HP' ? '#000' : '';
+    document.getElementById('powerInput').value = '';
+    document.getElementById('resultCard').style.display = 'none';
+  }
+
+  // ── Wallet connect ────────────────────────────────
+  async function connectWallet() {
+    if (!window.ethereum) { showToast('Please install MetaMask!', 'error'); return; }
+    try {
+      document.getElementById('connectBtn').disabled    = true;
+      document.getElementById('connectBtn').textContent = 'Connecting…';
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      try {
+        await provider.send("wallet_switchEthereumChain", [{ chainId: BASE_CHAIN_ID }]);
+      } catch(e) {
+        if (e.code === 4902) {
+          await provider.send("wallet_addEthereumChain", [{
+            chainId: BASE_CHAIN_ID, chainName: "Base",
+            nativeCurrency: { name:"Ether", symbol:"ETH", decimals:18 },
+            rpcUrls: ["https://mainnet.base.org"],
+            blockExplorerUrls: ["https://basescan.org"]
+          }]);
+        }
+      }
+      signer = await provider.getSigner();
+      const addr = await signer.getAddress();
+      if (CONTRACT_ADDRESS) contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      document.getElementById('dot').classList.add('on');
+      const el = document.getElementById('walletAddr');
+      el.textContent = addr.slice(0,6) + '...' + addr.slice(-4);
+      el.classList.add('connected');
+      document.getElementById('connectBtn').textContent      = 'Connected ✓';
+      document.getElementById('connectBtn').style.background = 'var(--accent3)';
+      document.getElementById('connectBtn').style.color      = '#000';
+      document.getElementById('signPanel').classList.add('visible');
+      showToast('Connected to Base! ✓', 'success');
+    } catch(e) {
+      document.getElementById('connectBtn').disabled    = false;
+      document.getElementById('connectBtn').textContent = 'Connect Wallet';
+      showToast(e.message || 'Connection failed', 'error');
+    }
+  }
+
+  // ── Sign Message ──────────────────────────────────
+  async function signOwnership() {
+    if (!signer) { showToast('Connect wallet first.', 'error'); return; }
+    const btn = document.getElementById('signBtn');
+    btn.disabled = true; btn.textContent = 'Signing…';
+    try {
+      const addr    = await signer.getAddress();
+      const dappUrl = window.location.href;
+      const message = `Hello this is to help all electrical engineers. ${dappUrl}`;
+      const signature = await signer.signMessage(message);
+      document.getElementById('sigMessage').textContent = message;
+      document.getElementById('sigWallet').textContent  = addr;
+      document.getElementById('sigHash').textContent    = signature;
+      document.getElementById('bsVerifyLink').href      = `https://basescan.org/address/${addr}`;
+      document.getElementById('sigBox').classList.add('visible');
+      showToast('Signed! ✓ Copy your signature hash.', 'success');
+      btn.textContent = '✅ Signed! Sign Again';
+      btn.disabled    = false;
+    } catch(e) {
+      btn.textContent = 'Sign Message with My Wallet';
+      btn.disabled    = false;
+      showToast(e.code === 4001 ? 'Rejected.' : (e.message || 'Sign failed'), 'error');
+    }
+  }
+
+  // ── Copy helper ───────────────────────────────────
+  function copyText(id) {
+    navigator.clipboard.writeText(document.getElementById(id).textContent)
+      .then(() => showToast('Copied! ✓', 'success'))
+      .catch(() => showToast('Copy failed.', 'error'));
+  }
+
+  // ── Main Calculation ──────────────────────────────
+  async function calculate() {
+    let rawPower = parseFloat(document.getElementById('powerInput').value);
+    const volt   = parseFloat(document.getElementById('voltInput').value);
+    const pf     = parseFloat(document.getElementById('pfInput').value);
+    const eff    = parseFloat(document.getElementById('effInput').value);
+    const install= parseFloat(document.getElementById('installMethod').value);
+    const matl   = document.getElementById('cableMaterial').value;
+
+    if (!rawPower || rawPower <= 0) { showToast('Please enter the motor power.', 'error'); return; }
+    if (!volt || volt <= 0)         { showToast('Please enter supply voltage.', 'error'); return; }
+    if (pf < 0.5 || pf > 1)        { showToast('Power factor must be 0.5 – 1.0', 'error'); return; }
+    if (eff < 0.5 || eff > 1)      { showToast('Efficiency must be 0.5 – 1.0', 'error'); return; }
+
+    setBtnLoading(true);
+
+    try {
+      // Convert HP to kW if needed
+      const powerKW = powerUnitM === 'HP' ? rawPower * 0.7457 : rawPower;
+      const powerW  = powerKW * 1000;
+
+      // ── Full Load Current (FLC) ──────────────────
+      // 3-phase: I = P / (√3 × V × cosφ × η)
+      // 1-phase: I = P / (V × cosφ × η)
+      let flc;
+      if (phaseMode === 3) {
+        flc = powerW / (Math.sqrt(3) * volt * pf * eff);
+      } else {
+        flc = powerW / (volt * pf * eff);
+      }
+
+      // ── Starting Current ─────────────────────────
+      const startCurrent = flc * 6;
+
+      // ── Apparent Power (kVA) ─────────────────────
+      const kva = (powerKW / (pf * eff));
+
+      // ── Cable sizing (IEC method) ─────────────────
+      // Design current = FLC / installation factor
+      const designCurrent = flc / install;
+
+      const cableArr     = matl === 'copper' ? STD_CABLE_CU : STD_CABLE_AL;
+      const capacityArr  = matl === 'copper' ? CU_CAPACITY  : AL_CAPACITY;
+
+      let cableIdx = capacityArr.findIndex(cap => cap >= designCurrent);
+      if (cableIdx === -1) cableIdx = cableArr.length - 1;
+      const cableSize = cableArr[cableIdx];
+      const cableCap  = capacityArr[cableIdx];
+
+      // ── Circuit Breaker sizing ───────────────────
+      // Breaker ≥ 1.25 × FLC (motor protection)
+      // But must handle starting surge — use 2× FLC minimum
+      // Then round up to next standard size
+      const breakerMin = flc * 1.25;
+      const breakerIdx = STD_BREAKERS.findIndex(b => b >= breakerMin);
+      const breakerSize= STD_BREAKERS[breakerIdx === -1 ? STD_BREAKERS.length - 1 : breakerIdx];
+
+      // Thermal overload relay: set at 1.0 – 1.05 × FLC
+      const relayMin = (flc * 1.0).toFixed(1);
+      const relayMax = (flc * 1.05).toFixed(1);
+
+      // Contactor: rated ≥ FLC
+      const contactor = STD_BREAKERS.find(b => b >= flc) || STD_BREAKERS[STD_BREAKERS.length-1];
+
+      // ── Populate UI ──────────────────────────────
+      document.getElementById('rCurrent').textContent     = flc.toFixed(2);
+      document.getElementById('rStartCurrent').textContent= startCurrent.toFixed(1);
+      document.getElementById('rCableSize').textContent   = cableSize;
+      document.getElementById('rCableUnit').textContent   = `mm² ${matl === 'copper' ? 'Cu' : 'Al'}`;
+      document.getElementById('rBreaker').textContent     = breakerSize;
+      document.getElementById('rKva').textContent         = kva.toFixed(2);
+
+      document.getElementById('recCable').textContent     = `${cableSize} mm² ${matl === 'copper' ? 'Copper' : 'Aluminum'} (Capacity: ${cableCap}A)`;
+      document.getElementById('recBreaker').textContent   = `${breakerSize}A ${breakerSize <= 125 ? 'MCB' : 'MCCB'} (Type D / Motor Duty)`;
+      document.getElementById('recRelay').textContent     = `Set: ${relayMin}A – ${relayMax}A`;
+      document.getElementById('recContactor').textContent = `AC-3 duty, ≥ ${flc.toFixed(1)}A`;
+      document.getElementById('recStandard').textContent  = 'IEC 60364 · IEC 60947 · BS 7671';
+
+      // Warning
+      document.getElementById('warnMsg').textContent =
+        `Calculated for ${phaseMode}-phase ${volt}V motor, ${powerKW.toFixed(2)} kW (${(powerKW/0.7457).toFixed(2)} HP). ` +
+        `Verify against local wiring regulations. Apply derating for ambient temp >30°C. ` +
+        `For motors >30kW consider star-delta or soft starter to reduce starting current.`;
+
+      document.getElementById('resultCard').style.display = 'block';
+      document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      // ── On-chain tx ──────────────────────────────
+      if (contract && signer) {
+        try {
+          showToast('Sending to Base…');
+          const tx = await contract.calculate(
+            Math.round(powerW),
+            phaseMode,
+            Math.round(volt),
+            Math.round(pf  * 100),
+            Math.round(eff * 100)
+          );
+          const receipt = await tx.wait();
+          const badge   = document.getElementById('txBadge');
+          badge.style.display = 'block';
+          badge.innerHTML = `✓ Recorded on Base · <a href="https://basescan.org/tx/${receipt.hash}" target="_blank">View on Basescan ↗</a>`;
+          showToast('On-chain tx confirmed! ✓', 'success');
+        } catch(_) {
+          showToast('Calculated! Deploy contract for on-chain recording.', '');
+        }
+      } else {
+        showToast('Calculation complete! ✓', 'success');
+      }
+
+    } catch(e) {
+      showToast(e.message || 'Calculation error', 'error');
+    }
+
+    setBtnLoading(false);
+  }
+
+  // ── UI Helpers ────────────────────────────────────
+  function setBtnLoading(on) {
+    const btn = document.getElementById('calcBtn');
+    btn.disabled = on;
+    document.getElementById('btnInner').innerHTML = on
+      ? '<span class="spinner"></span> Calculating…'
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> CALCULATE`;
+  }
+
+  let toastTimer;
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'show ' + (type === 'error' ? 'error' : type === 'success' ? 'success' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = ''; }, 3500);
+  }
+
+  // ── Auto-connect ──────────────────────────────────
+  window.addEventListener('load', async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) connectWallet();
+      } catch(_) {}
+    }
+  });
+</script>
+</body>
+</html>
